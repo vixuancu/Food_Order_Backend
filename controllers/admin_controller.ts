@@ -1,8 +1,17 @@
 import { NextFunction, Request, Response } from "express";
 import { CreateVendorInput } from "../dto";
 import { Vendor } from "../models";
-import { generateSalt, hashPassword } from "../ultil";
+import { generateSalt, GeneratePassword } from "../ultil";
 
+export const FindVendor = async (id : string | undefined,email?: string) => {
+if(email) {
+    return await Vendor.findOne({ email: email });
+    
+}else {
+    return await Vendor.findById(id);
+}
+
+}
 
 export const CreateVendor = async (req: Request, res: Response, next: NextFunction) => {
 
@@ -11,14 +20,14 @@ export const CreateVendor = async (req: Request, res: Response, next: NextFuncti
     const { name, ownerName, address, foodType, pincode, phone, email, password } = <CreateVendorInput>req.body;
 
 
-    const existingVendor = await Vendor.findOne({ email: email });
+    const existingVendor = await FindVendor(undefined, email);
     if (existingVendor !== null) {
          return res.status(409).json({ message: "Vendor with this email already exists" });
     }
     
     // generate salt
     const salt = await generateSalt();
-    const userPassword = await hashPassword(password, salt); // hash the password with the salt
+    const userPassword = await GeneratePassword(password, salt); // hash the password with the salt
     //encrypt password using the salt
 
     const createVendor = await Vendor.create({
@@ -38,13 +47,21 @@ export const CreateVendor = async (req: Request, res: Response, next: NextFuncti
 
     res.json(createVendor);
 };
-export const GetVendors = (req: Request, res: Response, next: NextFunction) => {
+export const GetVendors = async (req: Request, res: Response, next: NextFunction) => {
     // Logic to get all vendors
-    res.status(200).json({ message: "Vendors retrieved successfully" });
+    const vendors = await Vendor.find();
+    if (vendors !== null) {
+        return res.status(200).json(vendors);
+    }
+    res.status(404).json({ message: "No vendors found" });
 };
 
-export const GetVendorById = (req: Request, res: Response, next: NextFunction) => {
+export const GetVendorById = async (req: Request, res: Response, next: NextFunction) => {
     // Logic to get a vendor by ID
     const vendorId = req.params.id;
-    res.status(200).json({ message: `Vendor with ID ${vendorId} retrieved` });
+    const vendor = await FindVendor(vendorId);
+    if (vendor !== null) {
+        return res.status(200).json(vendor);
+    }
+    res.status(404).json({ message: "Vendor not found" });
 };
