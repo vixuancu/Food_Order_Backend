@@ -12,7 +12,7 @@ interface VendorDoc extends Document {
     serviceAvailable: boolean;
     coverImage: [string];
     rating: number;
-    // foods: any;
+    foods: any;
 }
 const vendorSchema = new Schema<VendorDoc>({
     name: { type: String, required: true },
@@ -27,12 +27,12 @@ const vendorSchema = new Schema<VendorDoc>({
     serviceAvailable: { type: Boolean },
     coverImage: { type: [String] },
     rating: { type: Number },
-    // foods:[
-    //     {
-    //         type: Schema.Types.ObjectId,
-    //         ref: "food"
-    //     }
-    // ]
+    foods:[
+        {
+            type: Schema.Types.ObjectId,
+            ref: "food"
+        }
+    ]
 }, {
     toJSON:{
         transform: (doc, ret) => {
