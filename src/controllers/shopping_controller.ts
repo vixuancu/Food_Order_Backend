@@ -9,7 +9,7 @@ export const GetFoodAvailability = async (
   const pincode = req.params.pincode;
   const result = await Vendor.find({
     pincode: pincode,
-    serviceAvailable: false,
+    serviceAvailable: true,
   })
     .sort([["rating", "desc"]])
     .populate("foods");

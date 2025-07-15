@@ -6,6 +6,9 @@ import {
   EditCustomerProfile,
   GetCustomerProfile,
   RequestOtp,
+  CreateOrder,
+  GetOrders,
+  GetOrderById,
 } from "../controllers";
 import { Authenticate } from "../middlewares";
 
@@ -27,6 +30,9 @@ router.get("/profile", GetCustomerProfile);
 router.patch("/profile", EditCustomerProfile);
 
 // cart
-//order
 // payment
+//order
+router.post("/create-order", CreateOrder);
+router.get("/orders", GetOrders);
+router.get("/order/:id", GetOrderById);
 export { router as CustomerRouter };

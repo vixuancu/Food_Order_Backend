@@ -1,6 +1,5 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { APP_SECRET } from "../config";
 import { Request } from "express";
 import { AuthPayload, VendorPayload } from "../dto";
 
@@ -18,17 +17,29 @@ export const validatePassword = async (
   return (await GeneratePassword(enterPassword, salt)) === savePassword;
 };
 export const GenerateSignature = (payload: AuthPayload) => {
-  return jwt.sign(payload, APP_SECRET, { expiresIn: "1d" });
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("JWT_SECRET is not defined in environment variables");
+  }
+  return jwt.sign(payload, secret, { expiresIn: "1d" });
 };
 export const ValidateSignature = async (req: Request) => {
   const signature = req.get("Authorization");
   if (signature) {
-    const payload = jwt.verify(
-      signature.split(" ")[1],
-      APP_SECRET
-    ) as AuthPayload;
-    req.user = payload;
-    return true;
+    try {
+      const secret = process.env.JWT_SECRET;
+      if (!secret) {
+        throw new Error("JWT_SECRET is not defined in environment variables");
+      }
+      const payload = jwt.verify(
+        signature.split(" ")[1],
+        secret
+      ) as AuthPayload;
+      req.user = payload;
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
   return false;
 };

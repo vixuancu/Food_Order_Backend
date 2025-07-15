@@ -33,3 +33,8 @@ export class UserLoginInput {
   @Length(6, 20)
   password: string;
 }
+
+export class OrderInputs {
+  _id: string;
+  unit: number;
+}

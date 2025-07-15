@@ -5,6 +5,7 @@ import {
   CreateCustomerInput,
   UserLoginInput,
   EditCustomerProfileInput,
+  OrderInputs,
 } from "../dto";
 import {
   GeneratePassword,
@@ -14,7 +15,7 @@ import {
   GenerateSignature,
   validatePassword,
 } from "../ultil";
-import { Customer } from "../models";
+import { Customer, Food, Order } from "../models";
 
 export const CustomerSignup = async (
   req: Request,
@@ -52,6 +53,7 @@ export const CustomerSignup = async (
     firstName: "",
     lastName: "",
     address: "",
+    orders: [],
   });
   if (result) {
     // send the OTP to the user
@@ -182,7 +184,13 @@ export const GetCustomerProfile = async (
 ) => {
   const customer = req.user;
   if (customer) {
-    const existingCustomer = await Customer.findById(customer._id);
+    const existingCustomer = await Customer.findById(customer._id).populate({
+      path: "orders",
+      populate: {
+        path: "items.food",
+        model: "food",
+      },
+    });
     if (existingCustomer) {
       return res.status(200).json(existingCustomer);
     }
@@ -217,6 +225,97 @@ export const EditCustomerProfile = async (
       return res.status(200).json(updatedCustomer);
     }
     return res.status(404).json({ message: "Customer not found" });
+  }
+  return res.status(400).json({ message: "User not authenticated" });
+};
+export const CreateOrder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  //grab current login customer
+  const customer = req.user;
+  if (customer) {
+    // create an order Id
+    const orderId = `${Math.floor(Math.random() * 8999) + 1000}`;
+
+    const existingCustomer = await Customer.findById(customer._id);
+    if (!existingCustomer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+    //grab order items from request [{id:xx, unit:xx}]
+    const cart = <OrderInputs[]>req.body; // [{id:xx, unit:xx}]
+    let cartItems = Array();
+    let netAmount = 0.0;
+
+    //caculate total amount
+    const foods = await Food.find()
+      .where("_id")
+      .in(cart.map((item) => item._id))
+      .exec();
+
+    foods.map((food) => {
+      cart.map(({ _id, unit }) => {
+        if (String(food._id) === _id) {
+          netAmount += food.price * unit;
+          cartItems.push({ food, unit });
+        }
+      });
+    });
+    //create order with item description
+    if (cartItems) {
+      // create order
+      const currentOrder = await Order.create({
+        orderId: orderId,
+        items: cartItems,
+        totalAmount: netAmount,
+        orderDate: new Date(),
+        paidThrough: "COD", // default payment method
+        paymentResponse: "", // default response
+        orderStatus: "Waiting", // default status
+      });
+      if (currentOrder !== null) {
+        existingCustomer.orders.push(currentOrder);
+        await existingCustomer.save();
+        return res.status(201).json(currentOrder);
+      }
+    }
+    //finlly update orders to user account
+  }
+  return res.status(500).json({ message: "Failed to create order" });
+};
+
+export const GetOrders = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const customer = req.user;
+  if (customer) {
+    const existingCustomer = await Customer.findById(customer._id).populate({
+      path: "orders",
+    });
+    if (existingCustomer) {
+      return res.status(200).json(existingCustomer.orders);
+    }
+    return res.status(404).json({ message: "Customer not found" });
+  }
+  return res.status(400).json({ message: "User not authenticated" });
+};
+export const GetOrderById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const customer = req.user;
+  const orderId = req.params.id;
+
+  if (customer) {
+    const order = await Order.findById(orderId).populate("items.food");
+    if (order) {
+      return res.status(200).json(order);
+    }
+    return res.status(404).json({ message: "Order not found" });
   }
   return res.status(400).json({ message: "User not authenticated" });
 };
