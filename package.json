@@ -4,8 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon index.ts ",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "nodemon index.ts",
+    "dev": "nodemon --exec ts-node index.ts",
+    "clean-start": "npm run clean && npm start",
+    "clean": "rm -rf node_modules package-lock.json dist",
+    "fresh-install": "npm run clean && npm install",
+    "rebuild": "npm rebuild"
   },
   "author": "",
   "license": "ISC",

@@ -53,6 +53,7 @@ export const CustomerSignup = async (
     firstName: "",
     lastName: "",
     address: "",
+    cart: [], // Initialize empty cart
     orders: [],
   });
   if (result) {
@@ -228,6 +229,115 @@ export const EditCustomerProfile = async (
   }
   return res.status(400).json({ message: "User not authenticated" });
 };
+/**************** Add To Cart *****************/
+export const AddToCart = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  console.log("🛒 AddToCart called");
+  console.log("📝 Request body:", req.body);
+
+  const customer = req.user;
+  console.log("👤 Customer from token:", customer);
+
+  if (customer) {
+    const existingCustomer = await Customer.findById(customer._id);
+    console.log("🔍 Found customer:", existingCustomer ? "Yes" : "No");
+
+    const { _id, unit } = <OrderInputs>req.body;
+    console.log("🍔 Food ID:", _id, "Unit:", unit);
+
+    if (existingCustomer) {
+      const food = await Food.findById(_id);
+      console.log("🍕 Found food:", food ? "Yes" : "No");
+
+      if (food) {
+        // Get current cart
+        const cartItems = existingCustomer.cart;
+        console.log("🛒 Current cart items:", cartItems);
+
+        // Check if food already exists in cart
+        const existingItemIndex = cartItems.findIndex(
+          (item: any) => String(item.food) === String(_id)
+        );
+        console.log("📍 Existing item index:", existingItemIndex);
+
+        if (existingItemIndex > -1) {
+          // Update existing item
+          if (unit > 0) {
+            cartItems[existingItemIndex].unit = unit;
+          } else {
+            // Remove item if unit is 0
+            cartItems.splice(existingItemIndex, 1);
+          }
+        } else {
+          // Add new item to cart
+          if (unit > 0) {
+            cartItems.push({
+              food: _id,
+              unit: unit,
+            });
+          }
+        }
+
+        existingCustomer.cart = cartItems;
+        const savedCustomer = await existingCustomer.save();
+        console.log("💾 Cart saved successfully");
+
+        // Return cart with populated food details
+        const populatedCustomer = await Customer.findById(
+          customer._id
+        ).populate("cart.food");
+        console.log("🔄 Populated cart:", populatedCustomer?.cart);
+        return res.status(200).json(populatedCustomer?.cart);
+      }
+      return res.status(404).json({ message: "Food not found" });
+    }
+    return res.status(404).json({ message: "Customer not found" });
+  }
+  return res.status(400).json({ message: "User not authenticated" });
+};
+/**************** Get Cart *****************/
+export const GetCart = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const customer = req.user;
+  if (customer) {
+    const existingCustomer = await Customer.findById(customer._id).populate(
+      "cart.food"
+    );
+    if (existingCustomer) {
+      return res.status(200).json(existingCustomer.cart);
+    }
+    return res.status(404).json({ message: "Customer not found" });
+  }
+  return res.status(400).json({ message: "User not authenticated" });
+};
+/**************** Delete Cart *****************/
+export const DeleteCart = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const customer = req.user;
+  if (customer) {
+    const existingCustomer = await Customer.findById(customer._id);
+    if (existingCustomer) {
+      existingCustomer.cart = [] as any;
+      const cartRResult = await existingCustomer.save();
+      return res
+        .status(200)
+        .json({ message: "Cart cleared successfully", cart: cartRResult.cart });
+    }
+    return res.status(404).json({ message: "Customer not found" });
+  }
+  return res.status(400).json({ message: "User not authenticated" });
+};
+
+/**************** Create Order *****************/
 export const CreateOrder = async (
   req: Request,
   res: Response,
@@ -247,6 +357,12 @@ export const CreateOrder = async (
     const cart = <OrderInputs[]>req.body; // [{id:xx, unit:xx}]
     let cartItems = Array();
     let netAmount = 0.0;
+    let vendorId: string | undefined;
+
+    // Validate cart
+    if (!cart || cart.length === 0) {
+      return res.status(400).json({ message: "Cart is empty" });
+    }
 
     //caculate total amount
     const foods = await Food.find()
@@ -254,30 +370,85 @@ export const CreateOrder = async (
       .in(cart.map((item) => item._id))
       .exec();
 
-    foods.map((food) => {
-      cart.map(({ _id, unit }) => {
-        if (String(food._id) === _id) {
-          netAmount += food.price * unit;
-          cartItems.push({ food, unit });
+    console.log("🍕 Found foods:", foods.length);
+    console.log("🛒 Cart items:", cart.length);
+
+    // Check if all foods exist
+    if (foods.length === 0) {
+      return res.status(400).json({ message: "No foods found" });
+    }
+
+    // Process each cart item
+    cart.forEach(({ _id, unit }) => {
+      const food = foods.find((f) => String(f._id) === _id);
+      if (food) {
+        // Set vendorId from first food
+        if (!vendorId) {
+          vendorId = food.vendorId;
         }
-      });
+
+        // Check if all foods are from same vendor
+        if (food.vendorId !== vendorId) {
+          return res.status(400).json({
+            message: "All items must be from the same vendor",
+          });
+        }
+
+        netAmount += food.price * unit;
+        cartItems.push({ food: food._id, unit });
+      }
     });
+
+    console.log("🏪 Vendor ID:", vendorId);
+    console.log("💰 Net amount:", netAmount);
+    console.log("📦 Cart items:", cartItems.length);
+
+    // Validate vendorId exists
+    if (!vendorId) {
+      return res.status(400).json({ message: "Vendor ID not found" });
+    }
+
+    // Validate cartItems
+    if (cartItems.length === 0) {
+      return res.status(400).json({ message: "No valid items in cart" });
+    }
     //create order with item description
-    if (cartItems) {
-      // create order
-      const currentOrder = await Order.create({
-        orderId: orderId,
-        items: cartItems,
-        totalAmount: netAmount,
-        orderDate: new Date(),
-        paidThrough: "COD", // default payment method
-        paymentResponse: "", // default response
-        orderStatus: "Waiting", // default status
-      });
-      if (currentOrder !== null) {
-        existingCustomer.orders.push(currentOrder);
-        await existingCustomer.save();
-        return res.status(201).json(currentOrder);
+    if (cartItems.length > 0) {
+      try {
+        // create order
+        const currentOrder = await Order.create({
+          orderId: orderId,
+          vendorId: vendorId,
+          items: cartItems,
+          totalAmount: netAmount,
+          orderDate: new Date(),
+          paidThrough: "COD", // default payment method
+          paymentResponse: "", // default response
+          orderStatus: "Waiting", // default status
+          remarks: "",
+          deliveryId: "",
+          appliedOffers: false,
+          offerId: null,
+          readyTime: 45,
+        });
+
+        if (currentOrder) {
+          existingCustomer.cart = [] as any; // clear cart after order
+          existingCustomer.orders.push(currentOrder);
+          await existingCustomer.save();
+
+          // Return order with populated food details
+          const populatedOrder = await Order.findById(
+            currentOrder._id
+          ).populate("items.food");
+          return res.status(201).json(populatedOrder);
+        }
+      } catch (error) {
+        console.error("❌ Error creating order:", error);
+        return res.status(500).json({
+          message: "Failed to create order",
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
       }
     }
     //finlly update orders to user account

@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { CreateFoodInput, EditVendorInput, LoginVendorInput } from "../dto";
 import { FindVendor } from "./admin_controller";
 import { GenerateSignature, validatePassword } from "../ultil";
-import { Food } from "../models";
+import { Food, Order } from "../models";
 
 export const VendorLogin = async (
   req: Request,
@@ -119,15 +119,49 @@ export const AddFood = async (
   res: Response,
   next: NextFunction
 ) => {
+  console.log("🍔 AddFood called");
+  console.log("📝 Request body:", req.body);
+  console.log("📁 Request files:", req.files);
+
   const user = req.user;
   if (user) {
     const { name, description, category, foodType, readyTime, price } = <
       CreateFoodInput
     >req.body;
+
+    // Validate required fields
+    if (
+      !name ||
+      !description ||
+      !category ||
+      !foodType ||
+      !readyTime ||
+      !price
+    ) {
+      return res.status(400).json({
+        message: "Missing required fields",
+        required: [
+          "name",
+          "description",
+          "category",
+          "foodType",
+          "readyTime",
+          "price",
+        ],
+      });
+    }
+
     const existingVendor = await FindVendor(user._id);
     if (existingVendor !== null) {
       const files = req.files as Express.Multer.File[];
-      const images = files.map((file) => file.filename); // Assuming you want to store the filenames of uploaded images
+      console.log("📁 Files received:", files);
+
+      // Check if files exist and is an array
+      const images =
+        files && Array.isArray(files) ? files.map((file) => file.filename) : []; // Empty array if no files
+
+      console.log("🖼️ Images to save:", images);
+
       const createFood = await Food.create({
         vendorId: existingVendor._id,
         name,
@@ -165,4 +199,67 @@ export const GetFoods = async (
   }
 
   return res.status(501).json({ message: "something went wrong Get foods" });
+};
+
+/****************Get Orders *****************/
+export const GetCurrentOrders = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const user = req.user;
+  if (user) {
+    const orders = await Order.find({ vendorId: user._id }).populate(
+      "items.food"
+    );
+    if (orders != null) {
+      return res.status(200).json(orders);
+    }
+  }
+  return res.status(501).json({ message: "Get orders not implemented yet" });
+};
+/**************** Get Order Details *****************/
+export const GetOrderDetails = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  // Logic to get order details by ID
+  const orderId = req.params.id;
+  if (orderId) {
+    const order = await Order.findById(orderId).populate("items.food");
+    if (order) {
+      return res.status(200).json(order);
+    }
+  }
+
+  return res
+    .status(501)
+    .json({ message: `Get order ${orderId} not implemented yet` });
+};
+/**************** Process Order *****************/
+export const ProcessOrder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  // Logic to process an order by ID
+  const orderId = req.params.id;
+  const { status, remarks, time } = req.body; // ACCEPTED // REJECTED // UNDER_PROCESS // READY
+
+  if (orderId) {
+    const order = await Order.findById(orderId).populate("items.food");
+    if (order) {
+      order.orderStatus = status;
+      order.remarks = remarks;
+      if (time) {
+        order.readyTime = time;
+      }
+      const orderResult = await order.save();
+      return res.status(200).json(orderResult);
+    }
+  }
+  return res
+    .status(501)
+    .json({ message: `Process order ${orderId} not implemented yet` });
 };
