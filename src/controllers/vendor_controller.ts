@@ -1,8 +1,13 @@
 import { Request, Response, NextFunction } from "express";
-import { CreateFoodInput, EditVendorInput, LoginVendorInput } from "../dto";
+import {
+  CreateFoodInput,
+  CreateOfferInput,
+  EditVendorInput,
+  LoginVendorInput,
+} from "../dto";
 import { FindVendor } from "./admin_controller";
 import { GenerateSignature, validatePassword } from "../ultil";
-import { Food, Order } from "../models";
+import { Food, Offer, Order } from "../models";
 
 export const VendorLogin = async (
   req: Request,
@@ -262,4 +267,127 @@ export const ProcessOrder = async (
   return res
     .status(501)
     .json({ message: `Process order ${orderId} not implemented yet` });
+};
+/**************** Get Offers *****************/
+export const GetOffers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const user = req.user;
+  if (user) {
+    const offers = await Offer.find().populate("vendors");
+    let currentOffers = Array();
+    if (offers) {
+      offers.map((item) => {
+        if (item.vendors) {
+          item.vendors.map((vendor) => {
+            if (String(vendor._id) === String(user._id)) {
+              currentOffers.push(item);
+            }
+          });
+        }
+        if (item.offerType === "GENERIC") {
+          currentOffers.push(item);
+        }
+      });
+      return res.status(200).json(currentOffers);
+    }
+  }
+  return res.status(501).json({ message: "Get offers not implemented yet" });
+};
+/**************** Add Offer *****************/
+export const AddOffer = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const user = req.user;
+  if (user) {
+    const {
+      offerType,
+      title,
+      description,
+      minValue,
+      offerAmount,
+      startValidity,
+      endValidity,
+      promoCode,
+      promoType,
+      bank,
+      bins,
+      pincode,
+      isActive,
+    } = <CreateOfferInput>req.body;
+    const vendor = await FindVendor(user._id);
+    if (vendor) {
+      const offer = await Offer.create({
+        title,
+        description,
+        offerType,
+        vendors: [vendor],
+        minValue,
+        offerAmount,
+        startValidity,
+        endValidity,
+        promoCode,
+        promoType,
+        bank,
+        bins,
+        pincode,
+        isActive,
+      });
+      console.log("Offer created:", offer);
+      return res.status(201).json(offer);
+    }
+  }
+  return res.status(501).json({ message: "Add offer not implemented yet" });
+};
+
+export const EditOffers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const user = req.user;
+  const offerId = req.params.id;
+  if (user) {
+    const {
+      offerType,
+      title,
+      description,
+      minValue,
+      offerAmount,
+      startValidity,
+      endValidity,
+      promoCode,
+      promoType,
+      bank,
+      bins,
+      pincode,
+      isActive,
+    } = <CreateOfferInput>req.body;
+    const currentOffer = await Offer.findById(offerId);
+    if (currentOffer) {
+      const vendor = await FindVendor(user._id);
+      if (vendor) {
+        currentOffer.title = title;
+        currentOffer.description = description;
+        currentOffer.offerType = offerType;
+        currentOffer.minValue = minValue;
+        currentOffer.offerAmount = offerAmount;
+        currentOffer.startValidity = startValidity;
+        currentOffer.endValidity = endValidity;
+        currentOffer.promoCode = promoCode;
+        currentOffer.promoType = promoType;
+        currentOffer.bank = bank;
+        currentOffer.bins = bins;
+        currentOffer.pincode = pincode;
+        currentOffer.isActive = isActive;
+        const result = await currentOffer.save();
+        return res.status(200).json(result);
+      }
+    }
+  }
+  return res.status(501).json({ message: "Add offer not implemented yet" });
 };

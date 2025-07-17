@@ -1,5 +1,5 @@
 import express, { Request, Response, NextFunction } from "express";
-import { FoodDoc, Vendor } from "../models";
+import { FoodDoc, Offer, Vendor } from "../models";
 
 export const GetFoodAvailability = async (
   req: Request,
@@ -89,4 +89,22 @@ export const RestaurantById = async (
     return res.status(200).json(result);
   }
   return res.status(404).json({ message: "data not found" });
+};
+/****************  *****************/
+export const GetOffersByPincode = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const pincode = req.params.pincode;
+  // Assuming you have an Offer model to fetch offers
+  const offers = await Offer.find({
+    pincode: pincode,
+    isActive: true,
+  }).populate("vendors");
+
+  if (offers.length > 0) {
+    return res.status(200).json(offers);
+  }
+  return res.status(404).json({ message: "No offers found" });
 };

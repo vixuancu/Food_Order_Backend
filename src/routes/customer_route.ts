@@ -12,6 +12,7 @@ import {
   AddToCart,
   DeleteCart,
   GetCart,
+  VerifyOffer,
 } from "../controllers";
 import { Authenticate } from "../middlewares";
 
@@ -37,7 +38,8 @@ router.post("/cart", AddToCart);
 router.get("/cart", GetCart);
 router.delete("/cart", DeleteCart);
 // payment
-
+// apply offers
+router.get("/offers/verify/:id", VerifyOffer);
 //order
 router.post("/create-order", CreateOrder);
 router.get("/orders", GetOrders);

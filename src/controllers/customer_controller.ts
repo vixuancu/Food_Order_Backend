@@ -15,7 +15,7 @@ import {
   GenerateSignature,
   validatePassword,
 } from "../ultil";
-import { Customer, Food, Order } from "../models";
+import { Customer, Food, Offer, Order } from "../models";
 
 export const CustomerSignup = async (
   req: Request,
@@ -487,6 +487,37 @@ export const GetOrderById = async (
       return res.status(200).json(order);
     }
     return res.status(404).json({ message: "Order not found" });
+  }
+  return res.status(400).json({ message: "User not authenticated" });
+};
+
+export const VerifyOffer = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const customer = req.user;
+  const offerId = req.params.id;
+
+  if (customer) {
+    const existingCustomer = await Customer.findById(customer._id);
+    if (existingCustomer) {
+      // Logic to verify the offer
+      const appliedOffer = await Offer.findById(offerId);
+      if (appliedOffer) {
+        if (appliedOffer.promoType === "USER") {
+          // only can apply once per user
+        } else {
+          if (appliedOffer.isActive) {
+            return res.status(200).json({
+              message: "Offer verified successfully",
+              offer: appliedOffer,
+            });
+          }
+        }
+      }
+    }
+    return res.status(404).json({ message: "Customer not found" });
   }
   return res.status(400).json({ message: "User not authenticated" });
 };
